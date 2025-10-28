@@ -139,12 +139,16 @@ const EvaluationScreen: React.FC<EvaluationScreenProps> = ({ evaluation, practic
     if (evaluation?.improvedAnswers) {
         markdownContent += `## Path to Band 7.5: Model Answers\n\n`;
         
-        markdownContent += `### Writing Task 1\n\n#### Your Answer\n\n`;
+        markdownContent += `### Writing Task 1\n\n#### Question\n\n`;
+        markdownContent += `${testContent.writing.task1.prompt}\n\n`;
+        markdownContent += `#### Your Answer\n\n`;
         markdownContent += "```\n" + (userAnswers.writing.task1 || "No answer provided.") + "\n```\n\n";
         markdownContent += `#### Model Answer (Band 7.5)\n\n`;
         markdownContent += "```\n" + evaluation.improvedAnswers.writingTask1 + "\n```\n\n";
 
-        markdownContent += `### Writing Task 2\n\n#### Your Answer\n\n`;
+        markdownContent += `### Writing Task 2\n\n#### Question\n\n`;
+        markdownContent += `${testContent.writing.task2}\n\n`;
+        markdownContent += `#### Your Answer\n\n`;
         markdownContent += "```\n" + (userAnswers.writing.task2 || "No answer provided.") + "\n```\n\n";
         markdownContent += `#### Model Answer (Band 7.5)\n\n`;
         markdownContent += "```\n" + evaluation.improvedAnswers.writingTask2 + "\n```\n\n";
@@ -230,8 +234,34 @@ const EvaluationScreen: React.FC<EvaluationScreenProps> = ({ evaluation, practic
                 <div className="bg-gray-50 p-8 rounded-2xl border border-gray-200 mb-10">
                     <h2 className="text-3xl font-bold text-center mb-6 text-gray-800">Your Path to Band 7.5: Model Answers</h2>
                     <div className="space-y-6">
-                        <AnswerComparison title="Writing Task 1" original={userAnswers.writing.task1} improved={evaluation.improvedAnswers.writingTask1} />
-                        <AnswerComparison title="Writing Task 2" original={userAnswers.writing.task2} improved={evaluation.improvedAnswers.writingTask2} />
+                        <div className="bg-white p-6 rounded-lg shadow-sm">
+                          <h4 className="text-lg font-semibold text-gray-800 mb-2">Writing Task 1</h4>
+                          <p className="mb-4 p-3 bg-gray-100 rounded-md border text-gray-700">{testContent.writing.task1.prompt}</p>
+                          <div className="grid md:grid-cols-2 gap-6">
+                              <div>
+                                  <h5 className="font-bold text-gray-600 mb-2">Your Answer</h5>
+                                  <div className="bg-gray-100 p-4 rounded-md border h-full whitespace-pre-wrap text-sm">{userAnswers.writing.task1 || "No answer provided."}</div>
+                              </div>
+                              <div>
+                                  <h5 className="font-bold text-green-700 mb-2">Band 7.5 Model Answer</h5>
+                                  <div className="bg-green-50 p-4 rounded-md border border-green-200 h-full whitespace-pre-wrap text-sm">{evaluation.improvedAnswers.writingTask1}</div>
+                              </div>
+                          </div>
+                        </div>
+                        <div className="bg-white p-6 rounded-lg shadow-sm">
+                          <h4 className="text-lg font-semibold text-gray-800 mb-2">Writing Task 2</h4>
+                          <p className="mb-4 p-3 bg-gray-100 rounded-md border text-gray-700">{testContent.writing.task2}</p>
+                          <div className="grid md:grid-cols-2 gap-6">
+                              <div>
+                                  <h5 className="font-bold text-gray-600 mb-2">Your Answer</h5>
+                                  <div className="bg-gray-100 p-4 rounded-md border h-full whitespace-pre-wrap text-sm">{userAnswers.writing.task2 || "No answer provided."}</div>
+                              </div>
+                              <div>
+                                  <h5 className="font-bold text-green-700 mb-2">Band 7.5 Model Answer</h5>
+                                  <div className="bg-green-50 p-4 rounded-md border border-green-200 h-full whitespace-pre-wrap text-sm">{evaluation.improvedAnswers.writingTask2}</div>
+                              </div>
+                          </div>
+                        </div>
                         {evaluation.improvedAnswers.speaking.map((item, index) => (
                             <AnswerComparison key={index} title={`Speaking Question: "${item.question}"`} original={userAnswers.speaking[index]?.answer} improved={item.improvedAnswer} />
                         ))}

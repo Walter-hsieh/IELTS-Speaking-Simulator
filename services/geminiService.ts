@@ -173,7 +173,7 @@ export const generateComprehensiveTest = async (videoUrl: string, transcript: st
       2.  Generate questions/prompts for the requested section(s) ONLY. All content must be thematically linked to the transcript.
       3.  For any sections NOT requested, you MUST provide empty or default values (e.g., empty arrays for questions, empty strings for prompts) to satisfy the schema. Do not omit any top-level keys.
       4.  For Listening and Reading questions, you MUST provide a correct 'answer' for each question.
-      5.  For Writing Task 1, if you generate a table, the 'data' field must be a string in clean CSV format, with the first line being comma-separated headers (e.g., 'Year,Revenue\\n2022,5M\\n2023,8M'). For other chart types, use a simple key-value format.
+      5.  For Writing Task 1, if you generate a table, the 'data' field must be a string in a clean, unformatted, raw CSV format. The first line MUST be the comma-separated headers. Subsequent lines are data rows. DO NOT include any markdown, code blocks, or styling characters. For example: 'Year,Revenue\\n2022,5M\\n2023,8M'.
       
       Strictly adhere to the JSON schema provided.
     `;
