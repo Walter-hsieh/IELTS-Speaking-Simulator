@@ -1,0 +1,7 @@
+{
+  "name": "IELTS Speaking Simulator",
+  "description": "An interactive mock test for IELTS Speaking. Get a comprehensive evaluation of your English ability based on IELTS grading standards, and receive personalized practice exercises to help you achieve a Band 7.5.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}
