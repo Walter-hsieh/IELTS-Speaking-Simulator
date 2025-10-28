@@ -1,3 +1,5 @@
+export type TestType = 'listening' | 'reading' | 'writing' | 'speaking' | 'full';
+
 export interface IQuestion {
   part: number;
   type: 'introduction' | 'cue-card' | 'discussion';
@@ -44,12 +46,14 @@ export interface IListeningQuestion {
   question: string;
   type: 'multiple-choice' | 'short-answer';
   options?: string[];
+  answer: string;
 }
 
 export interface IReadingQuestion {
   question: string;
   type: 'multiple-choice' | 'short-answer' | 'true-false-not-given';
   options?: string[];
+  answer: string;
 }
 
 export interface IListeningSection {

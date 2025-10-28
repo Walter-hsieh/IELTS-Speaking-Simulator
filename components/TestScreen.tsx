@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { IComprehensiveTest, IQuestion } from '../types';
+import { IComprehensiveTest, IQuestion, TestType } from '../types';
 import { MicrophoneIcon } from './icons/MicrophoneIcon';
 import { StopIcon } from './icons/StopIcon';
 
@@ -98,17 +98,58 @@ const YoutubePlayer: React.FC<{ videoId: string }> = ({ videoId }) => (
     </div>
 );
 
+const TableRenderer: React.FC<{ data: string; title: string }> = ({ data, title }) => {
+  try {
+    const rows = data.split('\n').filter(row => row.trim() !== '');
+    if (rows.length < 2) return <p>Table data is invalid.</p>; // Needs at least a header and one row
+
+    const headers = rows[0].split(',').map(h => h.trim());
+    const bodyRows = rows.slice(1).map(row => row.split(',').map(cell => cell.trim()));
+
+    return (
+      <div className="my-4 p-4 border rounded-md bg-gray-50 overflow-x-auto">
+        <h4 className="text-lg font-semibold mb-2 text-center">{title}</h4>
+        <table className="w-full text-sm text-left text-gray-500">
+          <thead className="text-xs text-gray-700 uppercase bg-gray-100">
+            <tr>
+              {headers.map((header, index) => (
+                <th key={index} scope="col" className="px-6 py-3">{header}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {bodyRows.map((row, rowIndex) => (
+              <tr key={rowIndex} className="bg-white border-b hover:bg-gray-50">
+                {row.map((cell, cellIndex) => (
+                  <td key={cellIndex} className="px-6 py-4">{cell}</td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
+  } catch (error) {
+    console.error("Failed to render table:", error);
+    return <p className="text-red-500">Error: Could not display the table data.</p>;
+  }
+};
 
 interface TestScreenProps {
   testContent: IComprehensiveTest;
   videoUrl: string;
   onTestComplete: (answers: Record<string, any>) => void;
+  testType: TestType;
 }
 
 type TestSection = 'listening' | 'reading' | 'writing' | 'speaking';
 
-const TestScreen: React.FC<TestScreenProps> = ({ testContent, videoUrl, onTestComplete }) => {
-  const [currentSection, setCurrentSection] = useState<TestSection>('listening');
+const TestScreen: React.FC<TestScreenProps> = ({ testContent, videoUrl, onTestComplete, testType }) => {
+  const getInitialSection = (): TestSection => {
+    if (testType === 'full') return 'listening';
+    return testType;
+  }
+  const [currentSection, setCurrentSection] = useState<TestSection>(getInitialSection());
   const [answers, setAnswers] = useState<Record<string, any>>({
     listening: {}, reading: {}, writing: { task1: '', task2: '' }, speaking: []
   });
@@ -117,11 +158,15 @@ const TestScreen: React.FC<TestScreenProps> = ({ testContent, videoUrl, onTestCo
   const [currentSpeakingQuestionIndex, setCurrentSpeakingQuestionIndex] = useState(0);
 
   const videoId = useMemo(() => {
-    const url = new URL(videoUrl);
-    if (url.hostname === "youtu.be") {
-        return url.pathname.slice(1);
+    try {
+      const url = new URL(videoUrl);
+      if (url.hostname === "youtu.be") {
+          return url.pathname.slice(1);
+      }
+      return url.searchParams.get("v") || '';
+    } catch (e) {
+      return '';
     }
-    return url.searchParams.get("v") || '';
   }, [videoUrl]);
   
   const handleAnswerChange = (section: TestSection, index: number, value: string) => {
@@ -145,20 +190,61 @@ const TestScreen: React.FC<TestScreenProps> = ({ testContent, videoUrl, onTestCo
   };
   
   const nextSection = () => {
+    if (testType !== 'full') {
+        onTestComplete(answers);
+        return;
+    }
     const sections: TestSection[] = ['listening', 'reading', 'writing', 'speaking'];
     const currentIndex = sections.indexOf(currentSection);
     if (currentIndex < sections.length - 1) {
       setCurrentSection(sections[currentIndex + 1]);
-    } else {
-      onTestComplete(answers);
     }
   };
 
+  const handleDownloadTest = () => {
+    let content = `IELTS Mock Test Content\n\n`;
+    content += `Video URL: ${videoUrl}\n\n`;
+    content += `--- TRANSCRIPT / READING PASSAGE ---\n`;
+    content += `${testContent.reading.transcript}\n\n`;
+
+    if (testContent.listening.questions.length > 0) {
+      content += `--- LISTENING QUESTIONS ---\n`;
+      testContent.listening.questions.forEach((q, i) => { content += `${i + 1}. ${q.question}\n`; });
+      content += `\n`;
+    }
+    if (testContent.reading.questions.length > 0) {
+      content += `--- READING QUESTIONS ---\n`;
+      testContent.reading.questions.forEach((q, i) => { content += `${i + 1}. ${q.question}\n`; });
+      content += `\n`;
+    }
+    if (testContent.writing.task1.prompt || testContent.writing.task2) {
+      content += `--- WRITING QUESTIONS ---\n`;
+      content += `Task 1: ${testContent.writing.task1.prompt}\n`;
+      if (testContent.writing.task1.chartData) {
+          content += `Chart Title: ${testContent.writing.task1.chartData.title}\n`;
+          content += `Chart Type: ${testContent.writing.task1.chartData.type}\n`;
+          content += `Chart Data: ${testContent.writing.task1.chartData.data}\n`;
+      }
+      content += `\nTask 2: ${testContent.writing.task2}\n`;
+    }
+
+    const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'ielts-mock-test.txt';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
   // SPEAKING SECTION LOGIC
-  const currentSpeakingQuestion: IQuestion = testContent.speaking[currentSpeakingQuestionIndex];
+  const currentSpeakingQuestion: IQuestion | undefined = testContent.speaking[currentSpeakingQuestionIndex];
   const isLastSpeakingQuestion = currentSpeakingQuestionIndex === testContent.speaking.length - 1;
 
   const handleNextSpeakingQuestion = () => {
+    if (!currentSpeakingQuestion) return;
     if (isListening) stopListening();
     const newAnswer = { question: currentSpeakingQuestion.question, answer: transcript };
     const updatedSpeakingAnswers = [...answers.speaking, newAnswer];
@@ -225,8 +311,9 @@ const TestScreen: React.FC<TestScreenProps> = ({ testContent, videoUrl, onTestCo
       <div className="space-y-8">
         <div>
           <h3 className="text-xl font-semibold mb-2">Task 1</h3>
-
-          {testContent.writing.task1.chartImage && (
+          {testContent.writing.task1.chartData?.type === 'table' ? (
+             <TableRenderer data={testContent.writing.task1.chartData.data} title={testContent.writing.task1.chartData.title} />
+          ) : testContent.writing.task1.chartImage && (
             <div className="my-4 p-4 border rounded-md flex justify-center bg-gray-50">
                 <img 
                     src={`data:image/png;base64,${testContent.writing.task1.chartImage}`} 
@@ -235,7 +322,6 @@ const TestScreen: React.FC<TestScreenProps> = ({ testContent, videoUrl, onTestCo
                 />
             </div>
            )}
-
           <p className="mb-2 p-4 bg-gray-100 rounded-md">{testContent.writing.task1.prompt}</p>
           <textarea 
             className="w-full p-2 border border-gray-300 rounded-md min-h-[200px]"
@@ -258,7 +344,9 @@ const TestScreen: React.FC<TestScreenProps> = ({ testContent, videoUrl, onTestCo
     </div>
   );
   
-  const renderSpeaking = () => (
+  const renderSpeaking = () => {
+    if (!currentSpeakingQuestion) return <p>Loading speaking question...</p>;
+    return (
     <div className="w-full flex flex-col items-center">
       <h2 className="text-2xl font-bold mb-6 text-center">Part 4: Speaking</h2>
       <div className="w-full max-w-3xl mb-8 p-6 bg-gray-100 rounded-lg shadow-inner">
@@ -298,20 +386,28 @@ const TestScreen: React.FC<TestScreenProps> = ({ testContent, videoUrl, onTestCo
       </div>
       {isListening && <p className="mt-4 text-red-500 animate-pulse">Recording...</p>}
     </div>
-  );
+  )};
 
   const renderContent = () => {
     switch (currentSection) {
-      case 'listening': return renderListening();
-      case 'reading': return renderReading();
-      case 'writing': return renderWriting();
-      case 'speaking': return renderSpeaking();
+      case 'listening': return testContent.listening?.questions?.length > 0 ? renderListening() : <p>No listening questions generated for this test.</p>;
+      case 'reading': return testContent.reading?.questions?.length > 0 ? renderReading() : <p>No reading questions generated for this test.</p>;
+      case 'writing': return (testContent.writing?.task1.prompt || testContent.writing?.task2) ? renderWriting() : <p>No writing tasks generated for this test.</p>;
+      case 'speaking': return testContent.speaking?.length > 0 ? renderSpeaking() : <p>No speaking questions generated for this test.</p>;
       default: return null;
     }
   };
 
   return (
     <div className="w-full">
+       <div className="w-full flex justify-end mb-4 -mt-4">
+        <button
+          onClick={handleDownloadTest}
+          className="bg-gray-200 text-gray-700 font-semibold py-2 px-4 rounded-lg hover:bg-gray-300 transition-colors text-sm"
+        >
+          Download Test Content
+        </button>
+      </div>
       {renderContent()}
       {currentSection !== 'speaking' && (
         <div className="text-center mt-8">
@@ -319,7 +415,7 @@ const TestScreen: React.FC<TestScreenProps> = ({ testContent, videoUrl, onTestCo
              onClick={nextSection}
              className="bg-green-600 text-white font-bold py-3 px-8 rounded-lg hover:bg-green-700 transition-colors duration-300 shadow-md text-lg"
            >
-             Next Section
+             {testType === 'full' ? 'Next Section' : 'Finish & Submit'}
            </button>
         </div>
       )}

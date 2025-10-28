@@ -3,7 +3,7 @@ import WelcomeScreen from './components/WelcomeScreen';
 import TestScreen from './components/TestScreen';
 import EvaluationScreen from './components/EvaluationScreen';
 import Loader from './components/Loader';
-import { IEvaluation, IPracticeItem, IComprehensiveTest } from './types';
+import { IEvaluation, IPracticeItem, IComprehensiveTest, TestType } from './types';
 import { evaluateComprehensiveTest, getPracticePlan, generateComprehensiveTest, generateChartImage } from './services/geminiService';
 
 export type AppState = 'welcome' | 'generating' | 'test' | 'evaluating' | 'results';
@@ -16,18 +16,20 @@ const App: React.FC = () => {
   const [userAnswers, setUserAnswers] = useState<Record<string, any> | null>(null);
   const [videoUrl, setVideoUrl] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
+  const [testType, setTestType] = useState<TestType | null>(null);
 
-  const startTest = useCallback(async (url: string, transcript: string) => {
+  const startTest = useCallback(async (url: string, transcript: string, type: TestType) => {
     setAppState('generating');
     setError(null);
     setVideoUrl(url);
+    setTestType(type);
 
     try {
       // Step 1: Generate the text-based test content, including structured data for the chart.
-      const testContent = await generateComprehensiveTest(url, transcript);
+      const testContent = await generateComprehensiveTest(url, transcript, type);
 
-      // Step 2: If chart data exists for Task 1, generate a visual chart image from it.
-      if (testContent.writing.task1.chartData) {
+      // Step 2: If chart data exists, is not a table, generate a visual chart image from it.
+      if (testContent.writing?.task1.chartData && testContent.writing.task1.chartData.type !== 'table') {
         const chartImageBase64 = await generateChartImage(testContent.writing.task1.chartData);
         testContent.writing.task1.chartImage = chartImageBase64;
       }
@@ -49,36 +51,46 @@ const App: React.FC = () => {
     setComprehensiveTest(null);
     setUserAnswers(null);
     setVideoUrl('');
+    setTestType(null);
   };
 
   const handleTestComplete = useCallback(async (answers: Record<string, any>) => {
-    if (!comprehensiveTest) {
+    if (!comprehensiveTest || !testType) {
       setError("Test content is missing. Please restart.");
       setAppState('welcome');
       return;
     }
-    setAppState('evaluating');
-    setUserAnswers(answers); // Store user answers
+    
+    setUserAnswers(answers);
     setError(null);
-    try {
-      const fullTestPayload = {
-        testContent: comprehensiveTest,
-        userAnswers: answers
-      };
+    
+    // Only run full evaluation for subjective tests (Writing, Speaking)
+    if (testType === 'writing' || testType === 'speaking' || testType === 'full') {
+      setAppState('evaluating');
+      try {
+        const fullTestPayload = {
+          testContent: comprehensiveTest,
+          userAnswers: answers
+        };
 
-      const evalResult = await evaluateComprehensiveTest(fullTestPayload);
-      setEvaluation(evalResult);
-      
-      const practiceResult = await getPracticePlan(evalResult);
-      setPracticePlan(practiceResult);
+        const evalResult = await evaluateComprehensiveTest(fullTestPayload);
+        setEvaluation(evalResult);
+        
+        const practiceResult = await getPracticePlan(evalResult);
+        setPracticePlan(practiceResult);
 
+        setAppState('results');
+      } catch (err) {
+        console.error(err);
+        setError('An error occurred during evaluation. Please try again.');
+        setAppState('test');
+      }
+    } else { // For Listening and Reading, just show the answer key
+      setEvaluation(null);
+      setPracticePlan(null);
       setAppState('results');
-    } catch (err) {
-      console.error(err);
-      setError('An error occurred during evaluation. Please try again.');
-      setAppState('test');
     }
-  }, [comprehensiveTest]);
+  }, [comprehensiveTest, testType]);
 
   const renderContent = () => {
     switch (appState) {
@@ -87,8 +99,8 @@ const App: React.FC = () => {
       case 'generating':
         return <Loader message="Analyzing transcript, creating test, and generating visuals..." />;
       case 'test':
-        if (comprehensiveTest && videoUrl) {
-          return <TestScreen testContent={comprehensiveTest} videoUrl={videoUrl} onTestComplete={handleTestComplete} />;
+        if (comprehensiveTest && videoUrl && testType) {
+          return <TestScreen testContent={comprehensiveTest} videoUrl={videoUrl} onTestComplete={handleTestComplete} testType={testType} />;
         }
         // Fallback if test data is missing
         restartTest();
@@ -96,8 +108,8 @@ const App: React.FC = () => {
       case 'evaluating':
         return <Loader message="Our AI examiner is evaluating your performance and preparing model answers..." />;
       case 'results':
-        if (evaluation && practicePlan && userAnswers) {
-          return <EvaluationScreen evaluation={evaluation} practicePlan={practicePlan} userAnswers={userAnswers} onRestart={restartTest} />;
+        if (comprehensiveTest && userAnswers) {
+          return <EvaluationScreen evaluation={evaluation} practicePlan={practicePlan} userAnswers={userAnswers} onRestart={restartTest} testContent={comprehensiveTest} />;
         }
         // Fallback
         restartTest();

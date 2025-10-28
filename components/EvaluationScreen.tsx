@@ -1,15 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import { IEvaluation, IPracticeItem } from '../types';
+import { IEvaluation, IPracticeItem, IComprehensiveTest, IReadingQuestion, IListeningQuestion } from '../types';
 
 // TypeScript declarations for libraries loaded via CDN
 declare const html2canvas: any;
 declare const jspdf: { jsPDF: new (options?: any) => any };
 
 interface EvaluationScreenProps {
-  evaluation: IEvaluation;
-  practicePlan: IPracticeItem[];
+  evaluation: IEvaluation | null;
+  practicePlan: IPracticeItem[] | null;
   userAnswers: Record<string, any>;
   onRestart: () => void;
+  testContent: IComprehensiveTest;
 }
 
 const ScoreCircle: React.FC<{ score: number }> = ({ score }) => {
@@ -42,38 +43,50 @@ const AnswerComparison: React.FC<{ title: string, original: string, improved: st
     </div>
 );
 
-const EvaluationScreen: React.FC<EvaluationScreenProps> = ({ evaluation, practicePlan, userAnswers, onRestart }) => {
+const AnswerKey: React.FC<{
+  title: string;
+  questions: (IReadingQuestion | IListeningQuestion)[];
+  userAnswers: Record<string, string>;
+}> = ({ title, questions, userAnswers }) => (
+  <div className="bg-white p-6 rounded-lg shadow-sm">
+    <h3 className="text-xl font-semibold text-gray-800 mb-4">{title} Answer Key</h3>
+    <div className="space-y-4">
+      {questions.map((q, index) => (
+        <div key={index} className="p-4 border rounded-md bg-gray-50">
+          <p className="font-semibold text-gray-700 mb-2">{index + 1}. {q.question}</p>
+          <p className="text-sm text-blue-700"><span className="font-bold">Your Answer:</span> {userAnswers[index] || <span className="italic text-gray-500">No answer provided</span>}</p>
+          <p className="text-sm text-green-700"><span className="font-bold">Correct Answer:</span> {q.answer}</p>
+        </div>
+      ))}
+    </div>
+  </div>
+);
+
+const EvaluationScreen: React.FC<EvaluationScreenProps> = ({ evaluation, practicePlan, userAnswers, onRestart, testContent }) => {
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
   const [isPdfReady, setIsPdfReady] = useState(false);
 
   useEffect(() => {
-    // Check if libraries are already available when the component mounts.
     if (typeof html2canvas !== 'undefined' && typeof jspdf !== 'undefined') {
       setIsPdfReady(true);
       return;
     }
-
-    // If not, poll for them. This handles the race condition of the component
-    // rendering before the CDN scripts have fully downloaded and executed.
     const intervalId = setInterval(() => {
       if (typeof html2canvas !== 'undefined' && typeof jspdf !== 'undefined') {
         setIsPdfReady(true);
         clearInterval(intervalId);
       }
-    }, 200); // Check every 200ms
-
-    // Cleanup on component unmount
+    }, 200);
     return () => clearInterval(intervalId);
-  }, []); // Empty dependency array ensures this runs only once on mount.
+  }, []);
 
-
-  const mainScores = evaluation.detailedScores.filter(s => 
+  const mainScores = evaluation?.detailedScores.filter(s => 
     ['Listening', 'Reading', 'Writing', 'Speaking'].includes(s.criterion)
-  );
+  ) || [];
   
-  const detailedCriteria = evaluation.detailedScores.filter(s => 
+  const detailedCriteria = evaluation?.detailedScores.filter(s => 
     !['Listening', 'Reading', 'Writing', 'Speaking'].includes(s.criterion)
-  );
+  ) || [];
 
   const handleSaveAsPdf = () => {
     setIsGeneratingPdf(true);
@@ -82,7 +95,7 @@ const EvaluationScreen: React.FC<EvaluationScreenProps> = ({ evaluation, practic
     if (reportElement) {
       html2canvas(reportElement, { scale: 2 }).then((canvas: any) => {
         const imgData = canvas.toDataURL('image/png');
-        const { jsPDF } = jspdf; // The UMD script attaches the constructor here
+        const { jsPDF } = jspdf;
         const pdf = new jsPDF({
           orientation: 'portrait',
           unit: 'px',
@@ -104,25 +117,26 @@ const EvaluationScreen: React.FC<EvaluationScreenProps> = ({ evaluation, practic
 
   const handleSaveAsMarkdown = () => {
     let markdownContent = `# IELTS Evaluation Report\n\n`;
-    markdownContent += `## Overall Band Score: ${evaluation.overallBandScore.toFixed(1)}\n\n`;
+    if(evaluation) {
+      markdownContent += `## Overall Band Score: ${evaluation.overallBandScore.toFixed(1)}\n\n`;
+      markdownContent += `| Section   | Score |\n`;
+      markdownContent += `|-----------|-------|\n`;
+      mainScores.forEach(score => {
+          markdownContent += `| ${score.criterion} | ${score.score.toFixed(1)} |\n`;
+      });
+      markdownContent += `\n`;
 
-    markdownContent += `| Section   | Score |\n`;
-    markdownContent += `|-----------|-------|\n`;
-    mainScores.forEach(score => {
-        markdownContent += `| ${score.criterion} | ${score.score.toFixed(1)} |\n`;
-    });
-    markdownContent += `\n`;
+      markdownContent += `## Examiner's Summary\n\n`;
+      markdownContent += `${evaluation.summary}\n\n`;
 
-    markdownContent += `## Examiner's Summary\n\n`;
-    markdownContent += `${evaluation.summary}\n\n`;
+      markdownContent += `## Detailed Feedback\n\n`;
+      detailedCriteria.forEach(item => {
+          markdownContent += `### ${item.criterion}: ${item.score.toFixed(1)}\n`;
+          markdownContent += `${item.feedback}\n\n`;
+      });
+    }
 
-    markdownContent += `## Detailed Feedback\n\n`;
-    detailedCriteria.forEach(item => {
-        markdownContent += `### ${item.criterion}: ${item.score.toFixed(1)}\n`;
-        markdownContent += `${item.feedback}\n\n`;
-    });
-
-    if (evaluation.improvedAnswers) {
+    if (evaluation?.improvedAnswers) {
         markdownContent += `## Path to Band 7.5: Model Answers\n\n`;
         
         markdownContent += `### Writing Task 1\n\n#### Your Answer\n\n`;
@@ -143,14 +157,16 @@ const EvaluationScreen: React.FC<EvaluationScreenProps> = ({ evaluation, practic
         });
     }
 
-    markdownContent += `## Your Personalized Practice Plan\n\n`;
-    practicePlan.forEach(item => {
-        markdownContent += `### ${item.title}\n\n`;
-        markdownContent += `**Focus Area:** ${item.area}\n\n`;
-        markdownContent += `${item.description}\n\n`;
-        markdownContent += `**Exercise:**\n`;
-        markdownContent += "```\n" + item.exercise + "\n```\n\n";
-    });
+    if (practicePlan) {
+      markdownContent += `## Your Personalized Practice Plan\n\n`;
+      practicePlan.forEach(item => {
+          markdownContent += `### ${item.title}\n\n`;
+          markdownContent += `**Focus Area:** ${item.area}\n\n`;
+          markdownContent += `${item.description}\n\n`;
+          markdownContent += `**Exercise:**\n`;
+          markdownContent += "```\n" + item.exercise + "\n```\n\n";
+      });
+    }
 
     const blob = new Blob([markdownContent], { type: 'text/markdown;charset=utf-8' });
     const url = URL.createObjectURL(blob);
@@ -172,65 +188,77 @@ const EvaluationScreen: React.FC<EvaluationScreenProps> = ({ evaluation, practic
   return (
     <div className="w-full">
       <div id="evaluation-report" className="p-2">
-        <h2 className="text-3xl font-bold text-center mb-2">Your Full Evaluation Report</h2>
+
+        {(testContent.listening.questions.length > 0 || testContent.reading.questions.length > 0) && (
+          <div className="bg-gray-50 p-8 rounded-2xl border border-gray-200 mb-10">
+            <h2 className="text-3xl font-bold text-center mb-6 text-gray-800">Answer Key</h2>
+            <div className="space-y-6">
+              {testContent.listening.questions.length > 0 && <AnswerKey title="Listening" questions={testContent.listening.questions} userAnswers={userAnswers.listening || {}} />}
+              {testContent.reading.questions.length > 0 && <AnswerKey title="Reading" questions={testContent.reading.questions} userAnswers={userAnswers.reading || {}} />}
+            </div>
+          </div>
+        )}
         
-        <div className="text-center mb-8">
-          <ScoreCircle score={evaluation.overallBandScore} />
-          <p className="text-lg font-semibold text-gray-700">Overall Band Score</p>
-        </div>
-
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8 text-center">
-          {mainScores.map(score => (
-            <div key={score.criterion} className="bg-gray-100 p-4 rounded-lg">
-              <p className="font-semibold text-gray-800">{score.criterion}</p>
-              <p className="text-3xl font-bold text-blue-600">{score.score.toFixed(1)}</p>
+        {evaluation && (
+          <>
+            <h2 className="text-3xl font-bold text-center mb-2">Your Full Evaluation Report</h2>
+            <div className="text-center mb-8">
+              <ScoreCircle score={evaluation.overallBandScore} />
+              <p className="text-lg font-semibold text-gray-700">Overall Band Score</p>
             </div>
-          ))}
-        </div>
-
-        <p className="text-gray-600 max-w-3xl mx-auto text-center mb-10 bg-gray-50 p-4 rounded-md border">{evaluation.summary}</p>
-
-        <div className="grid md:grid-cols-2 gap-6 mb-10">
-          {detailedCriteria.map((item) => (
-            <div key={item.criterion} className="bg-gray-50 p-6 rounded-lg border border-gray-200">
-              <div className="flex justify-between items-center mb-2">
-                <h3 className="text-xl font-semibold text-gray-800">{item.criterion}</h3>
-                <span className="text-2xl font-bold text-blue-600">{item.score.toFixed(1)}</span>
-              </div>
-              <p className="text-gray-600">{item.feedback}</p>
-            </div>
-          ))}
-        </div>
-
-        {evaluation.improvedAnswers && (
-            <div className="bg-gray-50 p-8 rounded-2xl border border-gray-200 mb-10">
-                <h2 className="text-3xl font-bold text-center mb-6 text-gray-800">Your Path to Band 7.5: Model Answers</h2>
-                <div className="space-y-6">
-                    <AnswerComparison title="Writing Task 1" original={userAnswers.writing.task1} improved={evaluation.improvedAnswers.writingTask1} />
-                    <AnswerComparison title="Writing Task 2" original={userAnswers.writing.task2} improved={evaluation.improvedAnswers.writingTask2} />
-                    {evaluation.improvedAnswers.speaking.map((item, index) => (
-                        <AnswerComparison key={index} title={`Speaking Question: "${item.question}"`} original={userAnswers.speaking[index]?.answer} improved={item.improvedAnswer} />
-                    ))}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8 text-center">
+              {mainScores.map(score => (
+                <div key={score.criterion} className="bg-gray-100 p-4 rounded-lg">
+                  <p className="font-semibold text-gray-800">{score.criterion}</p>
+                  <p className="text-3xl font-bold text-blue-600">{score.score.toFixed(1)}</p>
                 </div>
+              ))}
             </div>
+            <p className="text-gray-600 max-w-3xl mx-auto text-center mb-10 bg-gray-50 p-4 rounded-md border">{evaluation.summary}</p>
+            <div className="grid md:grid-cols-2 gap-6 mb-10">
+              {detailedCriteria.map((item) => (
+                <div key={item.criterion} className="bg-gray-50 p-6 rounded-lg border border-gray-200">
+                  <div className="flex justify-between items-center mb-2">
+                    <h3 className="text-xl font-semibold text-gray-800">{item.criterion}</h3>
+                    <span className="text-2xl font-bold text-blue-600">{item.score.toFixed(1)}</span>
+                  </div>
+                  <p className="text-gray-600">{item.feedback}</p>
+                </div>
+              ))}
+            </div>
+            {evaluation.improvedAnswers && (
+                <div className="bg-gray-50 p-8 rounded-2xl border border-gray-200 mb-10">
+                    <h2 className="text-3xl font-bold text-center mb-6 text-gray-800">Your Path to Band 7.5: Model Answers</h2>
+                    <div className="space-y-6">
+                        <AnswerComparison title="Writing Task 1" original={userAnswers.writing.task1} improved={evaluation.improvedAnswers.writingTask1} />
+                        <AnswerComparison title="Writing Task 2" original={userAnswers.writing.task2} improved={evaluation.improvedAnswers.writingTask2} />
+                        {evaluation.improvedAnswers.speaking.map((item, index) => (
+                            <AnswerComparison key={index} title={`Speaking Question: "${item.question}"`} original={userAnswers.speaking[index]?.answer} improved={item.improvedAnswer} />
+                        ))}
+                    </div>
+                </div>
+            )}
+          </>
         )}
 
-        <div className="bg-blue-50 p-8 rounded-2xl border border-blue-200">
-          <h2 className="text-3xl font-bold text-center mb-6 text-blue-800">Your Personalized Practice Plan to Reach Band 7.5</h2>
-          <div className="space-y-6">
-            {practicePlan.map((item, index) => (
-              <div key={index} className="bg-white p-6 rounded-lg shadow-sm">
-                <h3 className="text-xl font-semibold text-blue-700 mb-2">{item.title}</h3>
-                <p className="font-medium text-gray-500 mb-2">Focus Area: {item.area}</p>
-                <p className="text-gray-600 mb-4">{item.description}</p>
-                <div className="bg-gray-100 p-4 rounded-md border border-gray-200">
-                  <p className="font-semibold text-gray-800 mb-2">Exercise:</p>
-                  <p className="text-gray-700 whitespace-pre-wrap">{item.exercise}</p>
+        {practicePlan && practicePlan.length > 0 && (
+          <div className="bg-blue-50 p-8 rounded-2xl border border-blue-200">
+            <h2 className="text-3xl font-bold text-center mb-6 text-blue-800">Your Personalized Practice Plan to Reach Band 7.5</h2>
+            <div className="space-y-6">
+              {practicePlan.map((item, index) => (
+                <div key={index} className="bg-white p-6 rounded-lg shadow-sm">
+                  <h3 className="text-xl font-semibold text-blue-700 mb-2">{item.title}</h3>
+                  <p className="font-medium text-gray-500 mb-2">Focus Area: {item.area}</p>
+                  <p className="text-gray-600 mb-4">{item.description}</p>
+                  <div className="bg-gray-100 p-4 rounded-md border border-gray-200">
+                    <p className="font-semibold text-gray-800 mb-2">Exercise:</p>
+                    <p className="text-gray-700 whitespace-pre-wrap">{item.exercise}</p>
+                  </div>
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
-        </div>
+        )}
       </div>
       
       <div className="text-center mt-12 flex flex-col sm:flex-row justify-center items-center gap-4">

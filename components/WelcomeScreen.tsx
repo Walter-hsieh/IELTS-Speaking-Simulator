@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
+import { TestType } from '../types';
 
 interface WelcomeScreenProps {
-  onStart: (videoUrl: string, transcript: string) => void;
+  onStart: (videoUrl: string, transcript: string, testType: TestType) => void;
   error?: string | null;
 }
 
@@ -10,7 +11,7 @@ const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onStart, error }) => {
   const [transcript, setTranscript] = useState('');
   const [validationError, setValidationError] = useState('');
 
-  const handleStart = () => {
+  const handleStart = (testType: TestType) => {
     const youtubeRegex = /^(https?:\/\/)?(www\.)?(youtube\.com|youtu\.?be)\/.+$/;
     if (!youtubeRegex.test(videoUrl)) {
       setValidationError('Please enter a valid YouTube URL.');
@@ -21,14 +22,14 @@ const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onStart, error }) => {
       return;
     }
     setValidationError('');
-    onStart(videoUrl, transcript);
+    onStart(videoUrl, transcript, testType);
   };
 
   return (
     <div className="text-center w-full max-w-2xl">
       <h2 className="text-3xl font-bold text-gray-800 mb-4">Create Your IELTS Mock Test</h2>
       <p className="text-gray-600 mb-6 text-lg">
-        Provide a YouTube link and its transcript. Our AI will create a full mock test based on the video's actual content.
+        Provide a YouTube link and its transcript. Our AI will create a mock test based on the video's content.
       </p>
       
       <div className="w-full mb-4 text-left">
@@ -58,12 +59,26 @@ const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onStart, error }) => {
         {validationError && <p className="text-red-500 text-sm mt-1">{validationError}</p>}
       </div>
 
-      <button
-        onClick={handleStart}
-        className="bg-blue-600 text-white font-bold py-3 px-8 rounded-lg hover:bg-blue-700 transition-colors duration-300 shadow-md text-xl"
-      >
-        Generate Test & Start
-      </button>
+      <div className="w-full">
+        <p className="font-semibold text-gray-700 mb-3 text-lg">3. Choose your test type</p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          <button onClick={() => handleStart('full')} className="col-span-1 sm:col-span-2 lg:col-span-3 bg-blue-600 text-white font-bold py-3 px-6 rounded-lg hover:bg-blue-700 transition-colors duration-300 shadow-md text-xl">
+            Full Mock Test
+          </button>
+          <button onClick={() => handleStart('listening')} className="bg-gray-200 text-gray-800 font-semibold py-2 px-4 rounded-lg hover:bg-gray-300 transition-colors">
+            Listening Only
+          </button>
+          <button onClick={() => handleStart('reading')} className="bg-gray-200 text-gray-800 font-semibold py-2 px-4 rounded-lg hover:bg-gray-300 transition-colors">
+            Reading Only
+          </button>
+          <button onClick={() => handleStart('writing')} className="bg-gray-200 text-gray-800 font-semibold py-2 px-4 rounded-lg hover:bg-gray-300 transition-colors">
+            Writing Only
+          </button>
+           <button onClick={() => handleStart('speaking')} className="bg-gray-200 text-gray-800 font-semibold py-2 px-4 rounded-lg hover:bg-gray-300 transition-colors sm:col-span-2 lg:col-span-3">
+            Speaking Only
+          </button>
+        </div>
+      </div>
 
       {error && <p className="text-red-500 mt-4">{error}</p>}
     </div>

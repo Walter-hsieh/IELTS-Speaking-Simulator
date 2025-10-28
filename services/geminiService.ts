@@ -1,5 +1,5 @@
 import { GoogleGenAI, Type } from "@google/genai";
-import { IEvaluation, IPracticeItem, IComprehensiveTest, IChartData } from '../types';
+import { IEvaluation, IPracticeItem, IComprehensiveTest, IChartData, TestType } from '../types';
 
 if (!process.env.API_KEY) {
   throw new Error("API_KEY environment variable is not set");
@@ -24,8 +24,9 @@ const comprehensiveTestSchema = {
             properties: {
               question: { type: Type.STRING },
               type: { type: Type.STRING, enum: ['short-answer'] },
+              answer: { type: Type.STRING, description: "The correct answer for the question, derived directly from the transcript." }
             },
-            required: ['question', 'type'],
+            required: ['question', 'type', 'answer'],
           },
         },
       },
@@ -46,8 +47,9 @@ const comprehensiveTestSchema = {
             properties: {
               question: { type: Type.STRING },
               type: { type: Type.STRING, enum: ['short-answer', 'true-false-not-given'] },
+              answer: { type: Type.STRING, description: "The correct answer for the question, derived directly from the transcript." }
             },
-            required: ['question', 'type'],
+            required: ['question', 'type', 'answer'],
           },
         },
       },
@@ -70,7 +72,7 @@ const comprehensiveTestSchema = {
                     properties: {
                         type: { type: Type.STRING, enum: ['bar chart', 'line chart', 'pie chart', 'table'] },
                         title: { type: Type.STRING },
-                        data: { type: Type.STRING, description: "A simple, string-based representation of the data (e.g., 'Category A: 50, Category B: 75' or a CSV-like string for a table)." }
+                        data: { type: Type.STRING, description: "A simple, string-based representation of the data (e.g., 'Category A: 50, Category B: 75' or a CSV-like string for a table where the first row must be the headers)." }
                     },
                     required: ['type', 'title', 'data']
                 }
@@ -154,9 +156,10 @@ const comprehensiveEvaluationSchema = {
 };
 
 
-export const generateComprehensiveTest = async (videoUrl: string, transcript: string): Promise<IComprehensiveTest> => {
+export const generateComprehensiveTest = async (videoUrl: string, transcript: string, testType: TestType): Promise<IComprehensiveTest> => {
+    const requestedSection = testType === 'full' ? 'all sections' : `only the ${testType} section`;
     const prompt = `
-      You are an expert IELTS test creator. Your task is to create a complete, realistic IELTS mock test based on the provided video transcript. The Video URL is for context only. The transcript is the single source of truth.
+      You are an expert IELTS test creator. Your task is to create a realistic IELTS mock test based on the provided video transcript. You must generate content for ${requestedSection}.
 
       Video URL: ${videoUrl}
       
@@ -166,11 +169,13 @@ export const generateComprehensiveTest = async (videoUrl: string, transcript: st
       ---
 
       **Instructions:**
-      1.  Take the user-provided transcript above and place it **unmodified** into the 'transcript' field of the 'reading' section in the final JSON output.
-      2.  Using ONLY the content from the provided transcript, create all questions for the Listening, Reading, Writing, and Speaking sections. All parts of the test must be thematically linked to the transcript.
-      3.  For Writing Task 1, you MUST create structured data for a visual chart or table. This data will be used to generate an image. Provide a text prompt for the user that refers to this chart.
+      1.  **Always** place the user-provided transcript **unmodified** into the 'transcript' field of the 'reading' section in the final JSON output.
+      2.  Generate questions/prompts for the requested section(s) ONLY. All content must be thematically linked to the transcript.
+      3.  For any sections NOT requested, you MUST provide empty or default values (e.g., empty arrays for questions, empty strings for prompts) to satisfy the schema. Do not omit any top-level keys.
+      4.  For Listening and Reading questions, you MUST provide a correct 'answer' for each question.
+      5.  For Writing Task 1, if you generate a table, the 'data' field must be a string in clean CSV format, with the first line being comma-separated headers (e.g., 'Year,Revenue\\n2022,5M\\n2023,8M'). For other chart types, use a simple key-value format.
       
-      The questions should be varied and authentic to the IELTS format. Strictly adhere to the JSON schema provided.
+      Strictly adhere to the JSON schema provided.
     `;
     
     const response = await ai.models.generateContent({
@@ -218,7 +223,7 @@ export const evaluateComprehensiveTest = async (payload: { testContent: ICompreh
     const prompt = `
       You are an expert IELTS examiner. Evaluate a user's full IELTS test performance. Provide scores for each of the four main skills (Listening, Reading, Writing, Speaking) and for the specific sub-criteria of Writing and Speaking. The evaluation should be strict and align with official IELTS band descriptors.
 
-      **Primary Task:** Evaluate the user's answers and provide scores/feedback.
+      **Primary Task:** Evaluate the user's answers and provide scores/feedback for any submitted Writing and Speaking responses.
       **Secondary Task:** Rewrite the user's Writing and Speaking answers to a Band 7.5 level. These improved versions will be shown to the user for learning.
 
       Test Content and User Answers:
@@ -226,12 +231,12 @@ export const evaluateComprehensiveTest = async (payload: { testContent: ICompreh
       **Source Text (Video Transcript):** "${testContent.reading.transcript}"
 
       1. Listening:
-      Questions are based on the source text above.
+      (The user has been provided with the correct answers separately. Do not evaluate this section, but acknowledge it was part of the test.)
       Questions: ${JSON.stringify(testContent.listening.questions.map(q => q.question))}
       User's Answers: ${JSON.stringify(userAnswers.listening)}
-      (Grade listening accuracy based on the provided source text.)
 
       2. Reading:
+      (The user has been provided with the correct answers separately. Do not evaluate this section, but acknowledge it was part of the test.)
       Reading passage is the source text above.
       Questions: ${JSON.stringify(testContent.reading.questions.map(q => q.question))}
       User's Answers: ${JSON.stringify(userAnswers.reading)}
@@ -246,8 +251,8 @@ export const evaluateComprehensiveTest = async (payload: { testContent: ICompreh
       ${userAnswers.speaking.map((t: any, i: number) => `Question ${i + 1}: "${t.question}"\nAnswer: "${t.answer}"`).join('\\n\\n')}
 
       **Instructions for Output:**
-      1.  **Evaluation:** Provide an overall band score and a detailed breakdown of scores and feedback for each criterion.
-      2.  **Model Answers:** In the 'improvedAnswers' field, provide high-quality, rewritten versions of the user's Writing (Task 1 & 2) and all Speaking answers. These rewrites must exemplify a Band 7.5 level of English.
+      1.  **Evaluation:** Provide an overall band score and a detailed breakdown of scores and feedback for each criterion provided in the user answers. If a section (e.g., Writing) was not part of the test, reflect this in the scores.
+      2.  **Model Answers:** In the 'improvedAnswers' field, provide high-quality, rewritten versions of the user's Writing (Task 1 & 2) and all Speaking answers if they exist. These rewrites must exemplify a Band 7.5 level of English.
       
       Strictly adhere to the JSON schema provided.
     `;
