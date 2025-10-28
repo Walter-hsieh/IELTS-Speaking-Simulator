@@ -236,7 +236,10 @@ const EvaluationScreen: React.FC<EvaluationScreenProps> = ({ evaluation, practic
                     <div className="space-y-6">
                         <div className="bg-white p-6 rounded-lg shadow-sm">
                           <h4 className="text-lg font-semibold text-gray-800 mb-2">Writing Task 1</h4>
-                          <p className="mb-4 p-3 bg-gray-100 rounded-md border text-gray-700">{testContent.writing.task1.prompt}</p>
+                          <div className="mb-4">
+                            <h5 className="font-bold text-gray-600 mb-2">Question Prompt</h5>
+                            <p className="p-3 bg-gray-100 rounded-md border text-gray-700">{testContent.writing.task1.prompt}</p>
+                          </div>
                           <div className="grid md:grid-cols-2 gap-6">
                               <div>
                                   <h5 className="font-bold text-gray-600 mb-2">Your Answer</h5>
@@ -250,7 +253,10 @@ const EvaluationScreen: React.FC<EvaluationScreenProps> = ({ evaluation, practic
                         </div>
                         <div className="bg-white p-6 rounded-lg shadow-sm">
                           <h4 className="text-lg font-semibold text-gray-800 mb-2">Writing Task 2</h4>
-                          <p className="mb-4 p-3 bg-gray-100 rounded-md border text-gray-700">{testContent.writing.task2}</p>
+                          <div className="mb-4">
+                            <h5 className="font-bold text-gray-600 mb-2">Question Prompt</h5>
+                            <p className="p-3 bg-gray-100 rounded-md border text-gray-700">{testContent.writing.task2}</p>
+                          </div>
                           <div className="grid md:grid-cols-2 gap-6">
                               <div>
                                   <h5 className="font-bold text-gray-600 mb-2">Your Answer</h5>

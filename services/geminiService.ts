@@ -173,9 +173,9 @@ export const generateComprehensiveTest = async (videoUrl: string, transcript: st
       2.  Generate questions/prompts for the requested section(s) ONLY. All content must be thematically linked to the transcript.
       3.  For any sections NOT requested, you MUST provide empty or default values (e.g., empty arrays for questions, empty strings for prompts) to satisfy the schema. Do not omit any top-level keys.
       4.  For Listening and Reading questions, you MUST provide a correct 'answer' for each question.
-      5.  For Writing Task 1, if you generate a table, the 'data' field must be a string in a clean, unformatted, raw CSV format. The first line MUST be the comma-separated headers. Subsequent lines are data rows. DO NOT include any markdown, code blocks, or styling characters. For example: 'Year,Revenue\\n2022,5M\\n2023,8M'.
+      5.  For Writing Task 1, if you generate a table, the 'data' field must be a string in a clean, unformatted, raw CSV format. The first line MUST be the comma-separated headers. Subsequent lines are data rows. DO NOT include any markdown, code blocks, or styling characters. For example: 'Year,Revenue\\n2022,5M\\n2023,8M'. If the data is best represented as a table, you MUST set the 'type' field in 'chartData' to 'table'.
       
-      Strictly adhere to the JSON schema provided.
+      Strictly adhere to the JSON schema provided. Your response MUST be only the raw JSON object, without any markdown formatting, comments, or other text outside of the JSON itself.
     `;
     
     const response = await ai.models.generateContent({
@@ -248,13 +248,13 @@ export const evaluateComprehensiveTest = async (payload: { testContent: ICompreh
       User's Task 2 Answer: "${userAnswers.writing.task2}"
 
       4. Speaking:
-      ${userAnswers.speaking.map((t: any, i: number) => `Question ${i + 1}: "${t.question}"\nAnswer: "${t.answer}"`).join('\\n\\n')}
+      ${userAnswers.speaking.map((t: any, i: number) => `Question ${i + 1}: "${t.question}"\\nAnswer: "${t.answer}"`).join('\\n\\n')}
 
       **Instructions for Output:**
       1.  **Evaluation:** Provide an overall band score and a detailed breakdown of scores and feedback for each criterion provided in the user answers. If a section (e.g., Writing) was not part of the test, reflect this in the scores.
       2.  **Model Answers:** In the 'improvedAnswers' field, provide high-quality, rewritten versions of the user's Writing (Task 1 & 2) and all Speaking answers if they exist. These rewrites must exemplify a Band 7.5 level of English.
       
-      Strictly adhere to the JSON schema provided.
+      Strictly adhere to the JSON schema provided. Your response MUST be only the raw JSON object, without any markdown formatting, comments, or other text outside of the JSON itself.
     `;
     
     const response = await ai.models.generateContent({
@@ -310,7 +310,7 @@ export const getPracticePlan = async (evaluation: IEvaluation): Promise<IPractic
 
       Generate 3 distinct, actionable practice exercises. Each exercise should target one of the user's weakest areas across any of the four skills (Listening, Reading, Writing, Speaking).
       
-      Strictly adhere to the JSON schema provided.
+      Strictly adhere to the JSON schema provided. Your response MUST be only the raw JSON object, without any markdown formatting, comments, or other text outside of the JSON itself.
     `;
 
         const response = await ai.models.generateContent({
